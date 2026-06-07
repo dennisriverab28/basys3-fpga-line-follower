@@ -1,0 +1,79 @@
+module seven_segment_display(
+    input CLK100MHZ,
+    input [31:0] frequency,
+    output reg [6:0] seg,
+    output reg [3:0] an
+);
+
+    reg [3:0] digit;
+    reg [1:0] digit_select;
+    reg [16:0] refresh_counter;
+    reg [10:0] frequency_reg;
+
+    reg [3:0] thousands;
+    reg [3:0] hundreds;
+    reg [3:0] tens;
+    reg [3:0] ones;
+
+    initial begin
+        refresh_counter = 0;
+        digit_select = 0;
+    end
+
+    always @(posedge CLK100MHZ) begin
+        if(refresh_counter == 0) begin
+            frequency_reg <= frequency;
+        end
+
+        thousands = (frequency_reg / 1000) % 10;
+        hundreds  = (frequency_reg / 100) % 10;
+        tens      = (frequency_reg / 10) % 10;
+        ones      = frequency_reg % 10;
+
+        refresh_counter <= refresh_counter + 1;
+        if (refresh_counter >= 100000) begin
+            refresh_counter <= 0;
+            digit_select <= digit_select + 1;
+        end
+    end
+
+    always @(*) begin
+        case (digit_select)
+            2'b00: begin
+                an = 4'b1110;
+                digit = ones;
+            end
+            2'b01: begin
+                an = 4'b1101;
+                digit = tens;
+            end
+            2'b10: begin
+                an = 4'b1011;
+                digit = hundreds;
+            end
+            2'b11: begin
+                an = 4'b0111;
+                digit = thousands;
+            end
+            default: begin
+                an = 4'b1111;
+            end
+        endcase
+    end
+
+    always @(*) begin
+        case (digit)
+            4'b0000: seg = 7'b1000000; // 0
+            4'b0001: seg = 7'b1111001; // 1
+            4'b0010: seg = 7'b0100100; // 2
+            4'b0011: seg = 7'b0110000; // 3
+            4'b0100: seg = 7'b0011001; // 4
+            4'b0101: seg = 7'b0010010; // 5
+            4'b0110: seg = 7'b0000010; // 6
+            4'b0111: seg = 7'b1111000; // 7
+            4'b1000: seg = 7'b0000000; // 8
+            4'b1001: seg = 7'b0010000; // 9
+            default: seg = 7'b1111111; // Blank
+        endcase
+    end
+endmodule

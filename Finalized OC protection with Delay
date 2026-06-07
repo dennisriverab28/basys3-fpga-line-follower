@@ -1,0 +1,79 @@
+`timescale 1ns / 1ps
+
+module Current_Pro(
+    input clk,              // System clock input
+    input comp_outA,         // Comparator output from LM339N (high when overcurrent detected) on channel A
+    input comp_outB,         // Comparator output from LM339N (high when overcurrent detected) on channel B
+    output reg ena,          // Enable signal for Motor 1 
+    output reg enb,          // Enable signal for Motor 2
+    output reg In1,          // Control signal for Motor 1
+    output reg In3,          // Control signal for Motor 2
+    output reg LED0          // LED to indicate overcurrent
+);
+
+    // Timer variables
+    reg [27:0] timec;        // Timer to detect overcurrent duration (initial detection)
+    reg [27:0] delay_timer;  // Timer for 3-second delay before re-enabling motors
+    reg oc_flag;             // Flag to indicate overcurrent condition
+    reg oc1_flag;            // Temporary overcurrent flag
+    reg delay_active;        // Flag to indicate 3-second delay is running
+
+    // Initialize state on reset
+    initial begin
+        timec = 0;
+        delay_timer = 0;
+        oc_flag = 0;
+        oc1_flag = 0;
+        delay_active = 0;
+        ena = 1;
+        enb = 1;
+        In1 = 1;
+        In3 = 1;
+    end
+
+    // Always block triggered on the rising edge of the clock
+    always @(posedge clk) begin
+        // Check if overcurrent is detected
+        if (!comp_outA || !comp_outB) begin
+            oc1_flag = 1; // Set the temporary overcurrent flag
+        end
+
+        // Handle overcurrent detection timing
+        if (oc1_flag) begin
+            timec = timec + 1;
+            if (timec >= 20000000) begin  // After a certain period, set permanent flag
+                timec = 0;
+                oc1_flag = 0;
+                oc_flag = 1;  // Activate overcurrent flag
+
+                // Ensure the flag stays high if overcurrent persists
+                if (!comp_outA || !comp_outB) begin
+                    oc_flag = 1;
+                end
+            end
+        end 
+        // If overcurrent clears and delay is not active, start the 3-second timer
+        else if (oc_flag && comp_outA && comp_outB && !delay_active) begin
+            oc_flag = 0;       // Clear overcurrent flag
+            delay_active = 1;   // Start the 3-second delay
+        end
+
+        // 3-second delay logic
+        if (delay_active) begin
+            delay_timer = delay_timer + 1;
+            if (delay_timer >= 300000000) begin  // 3-second delay at 100 MHz clock
+                delay_timer = 0;
+                delay_active = 0;  // Disable the delay
+                ena = 1;           // Re-enable Motor 1
+                enb = 1;           // Re-enable Motor 2
+            end
+        end
+
+        // Control outputs based on overcurrent and delay states
+        ena <= !oc_flag && !delay_active;
+        enb <= !oc_flag && !delay_active;
+        In1 <= 1;
+        In3 <= 1;
+        LED0 = oc_flag;  // Turn on LED if overcurrent is active
+    end 
+endmodule

@@ -1,0 +1,492 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 11/18/2024 04:48:59 PM
+// Design Name: 
+// Module Name: motor_control
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
+
+
+module motor_control(
+    input clk,                    // Clock
+    input start,      
+    input [1:0]IR_sensor,   
+    input [1:0] color_count,  
+    input [2:0]rgb_desired,
+    input [2:0]rgb_output,    
+    input [2:0]psensor, 
+    output reg emit,
+    output reg claw,   
+    output reg LIN1,  
+    output reg LIN2,
+    output reg RIN1,
+    output reg RIN2,
+    output pwm_left,              // PWM output for left motor speed control
+    output pwm_right
+    );
+    reg [26:0]counter;
+    reg [26:0]delay_timer1=27'd100000000;
+    reg [26:0]delay_timer2=27'd50000000;
+    reg [16:0]dutycycle_left;  
+    reg [16:0]dutycycle_right;
+    reg [4:0] mode_select;
+    reg [2:0] mode;
+    reg [2:0] motor_control;
+    reg [1:0] color_order;
+    reg turn_detect;
+    reg turn_count;
+    reg turn_ignore;
+    reg return_turn_ignore;
+    reg Turn180;
+    reg Lturn90;
+    reg Rturn90;
+    reg delivered;
+        pwm_simple_IPS #(.WIDTH(17)) pwm_left_module (
+        .clk(clk),
+        .start(start),
+        .duty(dutycycle_left),
+        .pwm_out(pwm_left)
+    );
+   pwm_simple_IPS #(.WIDTH(17)) pwm_right_module (
+        .clk(clk),
+        .start(start),
+        .duty(dutycycle_right),
+        .pwm_out(pwm_right)
+    );
+    initial 
+    begin
+        Turn180=0;
+        Lturn90=0;
+        Rturn90=0;
+        delivered=0;
+        
+    end
+    always@(posedge clk)begin
+       mode_select={delivered, color_count[1],color_count[0], IR_sensor[1], IR_sensor[0]};
+    end
+    ////////////////////////////////////////////////////////////////////////////////////////////
+    localparam State1=2'b00, State2=2'b01, State3=2'b10, State4=2'b11;
+    localparam BLANK_STATE = 3'b111,FORWARD_STATE = 3'b101, Ladj_STATE = 3'b011, Radj_STATE = 3'b110, L90_STATE=3'b001, R90_STATE=3'b100,FORWARD_STATE1=3'b000,Left_Turn_State=3'b000;
+    localparam T180_STATE= 3'b000;  
+    ////////////////////////////////////////////////////////////////////////////////////////////
+     always @(posedge clk ) begin
+        if (!Turn180&&!Lturn90&&!Rturn90) 
+        begin
+            counter <= 0;
+            motor_control<=psensor;
+        end 
+        else if (Turn180||Lturn90||Rturn90)
+        begin
+            counter <= counter + 1;  
+        end
+        else if (Turn180&&!Lturn90&&!Rturn90)
+        begin
+            if(counter<delay_timer1)
+            begin
+            motor_control<=T180_STATE;
+            mode<=State3;
+            end
+            else if (counter>delay_timer1)
+            begin
+            Turn180=0;
+            end
+        end
+        else if (!Turn180&&Lturn90&&!Rturn90)
+        begin
+            if(counter<delay_timer2)
+            begin
+            motor_control<=L90_STATE;
+            end
+            else if (counter>delay_timer2)
+            begin
+            Lturn90=0;
+            end
+        end
+        else if (!Turn180&&!Lturn90&&Rturn90)
+        begin
+            if(counter<delay_timer2)
+            begin
+            motor_control<=R90_STATE;
+            end
+            else if (counter>delay_timer2)
+            begin
+            Rturn90=0;
+            end
+        end    
+    end
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+always@(posedge color_order)
+    begin
+    if(psensor==3'b001||psensor==3'b100)
+    begin
+    turn_detect=1;
+    end
+    else
+    begin
+    turn_detect=0;
+    end
+    end
+always@(posedge turn_detect)
+    begin
+    turn_count<=turn_count+1;
+    end
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+always@(posedge clk)
+    begin
+    case(mode)
+        State1:
+        begin
+          case (motor_control[2:0])
+            FORWARD_STATE: begin
+            dutycycle_left = 17'd98304; //75% duty cycle. 
+            dutycycle_right = 17'd98304;
+            LIN1=1;
+            RIN1=1;
+            LIN2=0;
+            RIN2=0;
+            end
+            FORWARD_STATE1: begin
+            dutycycle_left = 17'd98304; //75% duty cycle. 
+            dutycycle_right = 17'd98304;
+            LIN1=1;
+            RIN1=1;
+            LIN2=0;
+            RIN2=0; 
+            end
+            Ladj_STATE: begin
+            dutycycle_left = 17'd65536;   //50% duty cycle. 
+            dutycycle_right = 17'd98304;  //75% duty cycle.   
+            LIN1=1;
+            RIN1=1;
+            LIN2=0;
+            RIN2=0;    
+            end
+            Radj_STATE: begin
+            dutycycle_left = 17'd98304;  
+            dutycycle_right = 17'd65536;  
+            LIN1=1;
+            RIN1=1;
+            LIN2=0;
+            RIN2=0;                        
+            end
+            3'b111: begin  
+            dutycycle_left = 17'd98304;
+            dutycycle_right = 17'd98304;
+            LIN1=1;
+            RIN1=1;
+            LIN2=0;
+            RIN2=0;        
+            end
+            L90_STATE: begin
+            dutycycle_left = 17'd98304; 
+            dutycycle_right =17'd98304;
+            LIN1=1;
+            RIN1=1;
+            LIN2=0;
+            RIN2=0;          
+            end
+            R90_STATE: begin
+            dutycycle_left = 17'd98304;  
+            dutycycle_right = 17'd98304;
+            LIN1=1;
+            RIN1=1;
+            LIN2=0;
+            RIN2=0;        
+            end      
+           default :
+           begin
+            dutycycle_left = 17'd0;
+            dutycycle_right = 17'd0;
+            LIN1=0;
+            RIN1=0;
+            LIN2=0;
+            RIN2=0;            
+            end
+        endcase
+        end
+        State2:
+        begin
+        case(motor_control)
+        BLANK_STATE:
+        begin
+            dutycycle_left = 17'd98304; //75% duty cycle. 
+            dutycycle_right = 17'd98304;
+            LIN1=1;
+            RIN1=1;
+            LIN2=0;
+            RIN2=0;
+        end
+        FORWARD_STATE:
+        begin
+            dutycycle_left = 17'd98304; //75% duty cycle. 
+            dutycycle_right = 17'd98304;
+            LIN1=1;
+            RIN1=1;
+            LIN2=0;
+            RIN2=0;
+        end
+        Ladj_STATE:
+        begin
+            dutycycle_left = 17'd65536;   //50% duty cycle. 
+            dutycycle_right = 17'd98304;  //75% duty cycle.   
+            LIN1=1;
+            RIN1=1;
+            LIN2=0;
+            RIN2=0;  
+        end
+        Radj_STATE:
+        begin
+            dutycycle_left = 17'd98304;  
+            dutycycle_right = 17'd65536;  
+            LIN1=1;
+            RIN1=1;
+            LIN2=0;
+            RIN2=0; 
+        end
+        L90_STATE:
+        begin
+            dutycycle_left = 17'd98304; //75% duty cycle. 
+            dutycycle_right = 17'd98304;
+            LIN1=0;
+            RIN1=1;
+            LIN2=1;
+            RIN2=0;
+            Lturn90=1;
+        end
+        R90_STATE:
+        begin
+            dutycycle_left = 17'd98304; //75% duty cycle. 
+            dutycycle_right = 17'd98304;
+            LIN1=1;
+            RIN1=0;
+            LIN2=0;
+            RIN2=1;
+            Rturn90=1;
+        end
+        T180_STATE:
+        begin
+            dutycycle_left = 17'd98304; //75% duty cycle. 
+            dutycycle_right = 17'd98304;
+            LIN1=1;
+            RIN1=1;
+            LIN2=0;
+            RIN2=0;
+            Turn180=0;
+        end
+        default: 
+        begin
+            dutycycle_left = 17'd0;  
+            dutycycle_right = 17'd0;
+            LIN1=0;
+            RIN1=0;
+            LIN2=0;
+            RIN2=0;
+        end
+    endcase
+        end
+    State3:
+    begin
+    case(motor_control)
+        T180_STATE:
+        begin
+            dutycycle_left = 17'd98304; //75% duty cycle. 
+            dutycycle_right = 17'd98304;
+            LIN1=1;
+            RIN1=0;
+            LIN2=0;
+            RIN2=1;
+         end    
+         endcase
+    end
+    State4:
+    begin
+    case(motor_control)
+        BLANK_STATE:
+        begin
+            dutycycle_left = 17'd98304; //75% duty cycle. 
+            dutycycle_right = 17'd98304;
+            LIN1=0;
+            RIN1=0;
+            LIN2=1;
+            RIN2=1;
+        end
+        FORWARD_STATE:
+        begin
+            dutycycle_left = 17'd98304; //75% duty cycle. 
+            dutycycle_right = 17'd98304;
+            LIN1=0;
+            RIN1=0;
+            LIN2=1;
+            RIN2=1;
+        end
+        Ladj_STATE:
+        begin
+            dutycycle_left = 17'd65536;   //50% duty cycle. 
+            dutycycle_right = 17'd98304;  //75% duty cycle.   
+            LIN1=0;
+            RIN1=0;
+            LIN2=1;
+            RIN2=1;  
+        end
+        Radj_STATE:
+        begin
+            dutycycle_left = 17'd98304;  
+            dutycycle_right = 17'd65536;  
+            LIN1=0;
+            RIN1=0;
+            LIN2=1;
+            RIN2=1; 
+        end
+        L90_STATE:
+        begin
+            dutycycle_left = 17'd98304; //75% duty cycle. 
+            dutycycle_right = 17'd98304;
+            LIN1=0;
+            RIN1=0;
+            LIN2=1;
+            RIN2=1;
+        end
+        R90_STATE:
+        begin
+            dutycycle_left = 17'd98304; //75% duty cycle. 
+            dutycycle_right = 17'd98304;
+            LIN1=0;
+            RIN1=0;
+            LIN2=1;
+            RIN2=1;
+        end
+        Left_Turn_State:
+        begin
+            dutycycle_left = 17'd98304; //75% duty cycle. 
+            dutycycle_right = 17'd98304;
+            LIN1=1;
+            RIN1=1;
+            LIN2=0;
+            RIN2=1;
+            Turn180=0;
+        end
+        default: 
+        begin
+            dutycycle_left = 17'd0;  
+            dutycycle_right = 17'd0;
+            LIN1=0;
+            RIN1=0;
+            LIN2=0;
+            RIN2=0;
+        end
+    endcase
+    end
+    endcase
+    case(mode_select)
+        5'b00000:
+        begin
+        mode<=State1;
+        end
+        5'b00001:
+        begin
+        dutycycle_left = 17'd0;  
+        dutycycle_right = 17'd0;
+        LIN1=0;
+        RIN1=0;
+        LIN2=0;
+        RIN2=0;
+        emit=1;
+        end
+        5'b00010:
+        begin
+        mode<=State2;   
+        end
+        5'b00011:
+        begin
+        Turn180=1;
+        claw=1;
+        emit=0;
+        end
+        5'b00110:
+        begin
+        mode<=State2;
+        if(rgb_output==rgb_desired)
+            begin
+            delivered=1;
+            end
+        end
+        5'b01010:
+        begin
+        turn_ignore=1;
+        if(turn_count<turn_ignore)
+        begin
+        mode<=State1;
+        end
+        if(turn_count>turn_ignore)
+        begin
+        mode<=State2;
+            if(rgb_output==rgb_desired)
+            begin
+            delivered=1;
+            end
+        end
+        end
+        5'b01110:
+        begin
+        turn_ignore=2;
+        if(turn_count<turn_ignore)
+        begin
+        mode<=State1;
+        end
+        if(turn_count>turn_ignore)
+        begin
+        mode<=State2;
+        if(rgb_output==rgb_desired) begin
+                delivered=1;
+            end
+        end
+        end
+        5'b10110:
+        begin
+        claw=0;
+        end
+        5'b11010:
+        begin
+        claw=0;
+        end
+        5'b11110:
+        begin
+        claw=0;
+        turn_count=0;
+        return_turn_ignore=2;
+        end  
+        5'b10100:
+        begin
+        mode<=State4;
+        end
+        5'b11000:
+        begin
+        mode<=State4;
+        end
+        5'b11100:
+        begin  
+        if(turn_count<return_turn_ignore)
+        begin
+        mode<=State2;
+        end
+        else
+        begin        
+        mode<=State4;
+        end
+        end
+    endcase
+    end
+endmodule

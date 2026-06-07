@@ -1,0 +1,50 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 10/07/2024 03:55:04 PM
+// Design Name: 
+// Module Name: pwm_simple
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
+
+module pwm_simple
+(  // WIDTH defines the bit size for the counter
+    input CLK100MHZ,
+    input start,
+    input [16:0] duty,  
+    input [16:0] max,
+    output reg pwm_out      
+);
+
+    reg [16:0] counter;  
+
+    // PWM logic
+    always @(posedge CLK100MHZ) begin
+        if (!start) begin
+            counter <= 0;
+            pwm_out <= 0;
+        end 
+        else if (counter>max)
+        begin 
+        counter<=0;  
+        end
+        
+        else begin
+            counter <= counter + 1;  
+            pwm_out <= (counter < duty);
+        end
+    end
+
+endmodule

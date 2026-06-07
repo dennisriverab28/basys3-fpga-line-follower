@@ -1,0 +1,91 @@
+module tb_ColorSensorStateMachine;
+
+    reg clk = 0;
+    reg reset = 1;
+    reg signal_in = 0;
+    reg [1:0] freq_select = 2'b00; // Start freq_select at 00 (30 kHz)
+
+    // Outputs from the ColorSensorStateMachine
+    wire done_color;
+    wire [31:0] red, green, blue;
+    wire S2, S3;
+    wire [31:0] frequency;
+    wire done;
+
+    // Clock generation: 100 MHz clock, toggles every 5 ns (half period for 100 MHz)
+    always #5 clk = ~clk;
+
+    // Instantiate the ColorSensorStateMachine
+    ColorSensorStateMachine uut (
+        .clk(clk),
+        .reset(reset),
+        .signal_in(signal_in),
+        .done_color(done_color),
+        .red(red),
+        .green(green),
+        .blue(blue),
+        .S2(S2),
+        .S3(S3),
+        .frequency(frequency),
+        .done(done)
+    );
+
+    // Counter for generating signal_in and cycling frequencies
+    reg [15:0] counter = 0;   // Counter to track clock cycles for signal generation
+
+    always @(posedge clk) begin
+        // Change freq_select only when done is asserted (after each 1s frequency measurement)
+        if (done) begin
+            freq_select <= freq_select + 1;
+            if (freq_select == 2'b10) begin
+                freq_select <= 2'b00;  // Reset to 00 after 10 (so it cycles)
+            end
+        end
+
+        // Signal generation based on the current freq_select
+        case (freq_select)
+            2'b00: begin
+                // Generate 30 kHz signal (33.33 µs period, 16.67 µs high, 16.67 µs low)
+                if (counter < 1667) begin
+                    signal_in <= 1;
+                end else if (counter < 3333) begin
+                    signal_in <= 0;
+                end
+                counter <= (counter == 3333) ? 0 : counter + 1;
+            end
+            2'b01: begin
+                // Generate 40 kHz signal (25 µs period, 12.5 µs high, 12.5 µs low)
+                if (counter < 1250) begin
+                    signal_in <= 1;
+                end else if (counter < 2500) begin
+                    signal_in <= 0;
+                end
+                counter <= (counter == 2500) ? 0 : counter + 1;
+            end
+            2'b10: begin
+                // Generate 50 kHz signal (20 µs period, 10 µs high, 10 µs low)
+                if (counter < 1000) begin
+                    signal_in <= 1;
+                end else if (counter < 2000) begin
+                    signal_in <= 0;
+                end
+                counter <= (counter == 2000) ? 0 : counter + 1;
+            end
+            default: signal_in <= 0;  // Default to off if no valid frequency is selected
+        endcase
+    end
+
+    // Initial setup
+    initial begin
+        // Reset sequence
+        reset = 1;
+        freq_select = 2'b00;  // Ensure freq_select starts at 00
+        #20;
+        reset = 0;
+
+        // Let the simulation run for a while
+        #5000000; // This provides ample time for each color's frequency to be measured
+        $stop;
+    end
+
+endmodule

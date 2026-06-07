@@ -1,0 +1,80 @@
+`timescale 1ns / 1ps
+
+
+
+
+module IR_emitter(
+    input CLK100MHZ,
+    input reset,
+    input signal_in,             
+    input start, 
+    output pwm_signal,
+    output S2, S3,
+    output [6:0] seg,
+    output [3:0] an,
+    output [15:0] LED
+    );
+    wire [2:0] rgb_output;
+    reg [31:0] frequency;
+    wire [31:0] red, green, blue;
+    wire done_color;
+    reg [16:0]duty;
+    reg [16:0] max_value;
+    initial begin
+
+    end
+        pwm_simple ps(
+        .CLK100MHZ(CLK100MHZ),
+        .start(start),
+        .duty(duty),
+        .max(max_value),
+        .pwm_out(pwm_signal)
+    );
+        FrequencyToColorConverter f2 (
+        .CLK100MHZ(CLK100MHZ),
+        .reset(reset),
+        .done_color(done_color),
+        .red(red),
+        .green(green),
+        .blue(blue),
+        .rgb_output(rgb_output)
+        );
+        ColorSensorStateMachine csm (
+        .CLK100MHZ(CLK100MHZ),
+        .reset(reset),
+        .signal_in(signal_in),
+        .done_color(done_color),
+        .red(red),
+        .green(green),
+        .blue(blue),
+        .S2(S2),
+        .S3(S3)
+    );
+     seven_segment_display ssd (
+        .CLK100MHZ(CLK100MHZ),
+        .frequency({5'b0, frequency}),
+        .seg(seg),
+        .an(an)
+    );
+    always @(*) begin 
+    case(rgb_output[2:0])
+    3'b001: begin //red
+    max_value= 17'd100000;
+    duty = 17'd50000;
+    end
+    3'b010: begin//green
+    max_value= 17'd50000;
+    duty = 17'd25000;
+    end
+    3'b100: begin//blue
+    max_value = 17'd33333;
+    duty = 17'd16666;
+    end
+    default:
+    begin
+    max_value=17'd0;
+    duty = 17'd0;
+    end
+    endcase 
+    end
+endmodule

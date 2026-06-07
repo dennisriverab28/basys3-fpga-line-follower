@@ -1,0 +1,87 @@
+module top(
+    input CLK100MHZ,
+    input reset,
+    input signal_in,
+    input SW2,                  // Simulates the 'at_desk' signal
+    output S2, S3,
+    output [6:0] seg,
+    output [3:0] an,
+    output [15:0] LED,
+    output pwm_ir               // IR output signal
+);
+
+    // Internal Signals
+    wire [2:0] rgb_output;
+    wire done_color;
+    wire [31:0] red, green, blue;
+    wire line_following_active;
+    wire start_line_following;
+    wire at_desk;
+
+    // Assign 'at_desk' signal based on the simulated SW2 input
+    assign at_desk = SW2;// can just assign this to the sensor input from prox sensor
+
+    // LED Display Assignments
+    assign LED[2:0] = rgb_output;
+    assign LED[3] = done_color;
+
+    // Color Sensor Modules
+    FrequencyToColorConverter f2 (
+        .clk(CLK100MHZ),
+        .reset(reset),
+        .done_color(done_color),
+        .red(red),
+        .green(green),
+        .blue(blue),
+        .rgb_output(rgb_output)
+    );
+
+    ColorSensorStateMachine csm (
+        .clk(CLK100MHZ),
+        .reset(reset),
+        .signal_in(signal_in),
+        .done_color(done_color),
+        .red(red),
+        .green(green),
+        .blue(blue),
+        .S2(S2),
+        .S3(S3)
+    );
+
+    // Line-Following Module
+    line_following lf (
+        .clk(CLK100MHZ),
+        .reset(reset),
+        .start(start_line_following),
+        .psensor(signal_in),     // Line sensor input
+        .LIN1(LIN1),
+        .LIN2(LIN2),
+        .RIN1(RIN1),
+        .RIN2(RIN2),
+        .active(line_following_active)
+    );
+
+    // Control Logic for Line-Following and IR Emission
+    reg line_following_enabled;
+
+    always @(posedge CLK100MHZ or posedge reset) begin
+        if (reset) begin
+            line_following_enabled <= 1;
+        end else if (done_color && line_following_enabled) begin
+            line_following_enabled <= 1;  // Continue following line after color detection
+        end else if (at_desk) begin
+            line_following_enabled <= 0;  // Stop line-following at desk ADD more logic relzted to box singal + 180 turn and run away
+        end
+    end
+
+    assign start_line_following = line_following_enabled;
+
+    // IR Emitter for Emitting Frequency Based on Detected Color
+    IR_emitter ir_emitter (
+        .clk(CLK100MHZ),
+        .start(at_desk),         // Emit IR signal when rover reaches desk
+        .sw(rgb_output),         // Use detected color to set frequency
+        .pwm_signal(pwm_ir)      // Output IR PWM signal
+    );
+
+endmodule

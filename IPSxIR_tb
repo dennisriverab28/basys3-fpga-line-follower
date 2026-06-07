@@ -1,0 +1,106 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 11/04/2024 04:51:33 AM
+// Design Name: 
+// Module Name: IPSxIR_tb
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
+
+
+module IPSxIR_tb;
+    reg clk;
+    reg start;
+    reg [4:0] sensors;
+    wire pwm_left;
+    wire pwm_right;
+    wire LIN1;
+    wire LIN2;
+    wire RIN1;
+    wire RIN2;
+    IPSxIR uut (
+        .clk(clk),
+        .start(start),
+        .sensors(sensors),
+        .pwm_left(pwm_left),
+        .pwm_right(pwm_right),
+        .LIN1(LIN1),
+        .LIN2(LIN2),
+        .RIN1(RIN1),
+        .RIN2(RIN2)
+        );
+   initial 
+   begin
+        clk = 0;
+        forever #5 clk = ~clk;  // Toggle clock every 5ns for a 10ns period  
+    end 
+   initial begin
+   
+        start = 0;
+        sensors = 5'b00000;  // Default to stop
+        #20;    
+        start = 1;  
+        sensors = 5'b00000; 
+        #3000000;  
+        sensors = 5'b10100; 
+        #3000000;      
+        sensors = 5'b01100;  
+        #3000000;
+        sensors = 5'b11000;  
+        #3000000;
+        sensors = 5'b00100;  
+        #3000000;        
+        sensors = 5'b10000;  
+        #3000000;
+        sensors = 5'b11100;  
+        #3000000;
+        sensors = 5'b01000; 
+        #3000000;  
+        sensors = 5'b00010;
+        #3000000;    
+        sensors = 5'b10110;  
+        #3000000;
+        sensors = 5'b01110; 
+        #3000000;
+        sensors = 5'b11010; 
+        #3000000;
+        sensors = 5'b00110;
+        #10000;
+        sensors = 5'b10010; 
+        #10000;
+        sensors = 5'b11110;  
+        #3000000;  
+        sensors = 5'b01010;  
+        #3000000;
+        sensors = 5'b00001;
+        #3000000;
+        sensors = 5'b11101;
+        #3000000;
+        sensors = 5'b00101;
+        #3000000;
+        sensors = 5'b10001;
+        #3000000;
+        sensors =5'b00011;
+        #300;
+         sensors = 5'b10100; 
+        #100000000;   
+        sensors =5'b10111;
+        #3000;
+         sensors = 5'b10100; 
+        #100000000;
+
+    end
+
+endmodule

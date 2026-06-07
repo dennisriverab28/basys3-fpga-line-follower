@@ -1,0 +1,118 @@
+module top(
+    input CLK100MHZ,
+    input reset,
+    input signal_in,
+    input SW2,                  // Simulate at_desk signal
+    output S2, S3,
+    output [6:0] seg,
+    output [3:0] an,
+    output [15:0] LED,
+    output pwm_ir,              // IR output signal
+    output pwm_servo,           // Servo control for claw
+    output LIN1, LIN2, RIN1, RIN2  // Motor control signals
+);
+
+    // Internal Signals
+    wire [2:0] rgb_output;
+    wire done_color;
+    wire [31:0] red, green, blue;
+    reg start_line_following;
+    reg [7:0] servo_position;
+    reg [1:0] state;
+
+    // State Definitions
+    localparam IDLE = 2'b00;
+    localparam AT_DESK = 2'b01;
+    localparam PICKUP_BOX = 2'b10;
+    localparam DRIVE_AWAY = 2'b11;
+
+    // Instantiate Color Sensor Modules
+    FrequencyToColorConverter f2 (
+        .clk(CLK100MHZ),
+        .reset(reset),
+        .done_color(done_color),
+        .red(red),
+        .green(green),
+        .blue(blue),
+        .rgb_output(rgb_output)
+    );
+
+    ColorSensorStateMachine csm (
+        .clk(CLK100MHZ),
+        .reset(reset),
+        .signal_in(signal_in),
+        .done_color(done_color),
+        .red(red),
+        .green(green),
+        .blue(blue),
+        .S2(S2),
+        .S3(S3)
+    );
+
+    // Line-Following Module
+    line_following lf (
+        .clk(CLK100MHZ),
+        .reset(reset),
+        .start(start_line_following),
+        .psensor(signal_in),     // Line sensor input
+        .LIN1(LIN1),
+        .LIN2(LIN2),
+        .RIN1(RIN1),
+        .RIN2(RIN2)
+    );
+
+    // IR Emitter Module
+    IR_emitter ir_emitter (
+        .clk(CLK100MHZ),
+        .start(SW2),           // Emit IR signal at desk
+        .sw(rgb_output),
+        .pwm_signal(pwm_ir)
+    );
+
+    // Servo Control for Claw Mechanism
+    pwm_simple #(.WIDTH(21)) servo_pwm (
+        .clk(CLK100MHZ),
+        .start(1'b1),            // Always active for servo control
+        .duty(servo_position * 1111 + 50000),  // Calculate PWM for desired servo position
+        .max(21'd2000000),       // Max value for 20 ms period at 50 Hz
+        .pwm_out(pwm_servo)
+    );
+
+    // State Machine Logic
+    always @(posedge CLK100MHZ or posedge reset) begin
+        if (reset) begin
+            state <= IDLE;
+            start_line_following <= 1;
+            servo_position <= 8'd90; // Default servo position (open claw)
+        end else begin
+            case (state)
+                IDLE: begin
+                    start_line_following <= 1;
+                    if (SW2) begin // Desk detected
+                        state <= AT_DESK;
+                        start_line_following <= 0; // Stop at desk
+                    end
+                end
+
+                AT_DESK: begin
+                    if (done_color) begin
+                        state <= PICKUP_BOX;
+                    end
+                end
+
+                PICKUP_BOX: begin
+                    servo_position <= 8'd180; // Close claw to pick up box
+                    #20000000; // Wait for claw to close
+                    state <= DRIVE_AWAY;
+                end
+
+                DRIVE_AWAY: begin
+                    servo_position <= 8'd90; // Open claw for future use
+                    start_line_following <= 1; // Resume line-following to drive away
+                    state <= IDLE; // Go back to initial state
+                end
+            endcase
+        end
+    end
+
+endmodule

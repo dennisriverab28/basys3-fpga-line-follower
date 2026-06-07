@@ -1,0 +1,17 @@
+﻿# Vivado build outputs
+*.bit
+*.bin
+*.ltx
+*.rpt
+*.dcp
+*.xpr
+*.jou
+*.log
+.Xil/
+vivado_*.str
+vivado*.jou
+vivado*.log
+
+# OS
+.DS_Store
+Thumbs.db

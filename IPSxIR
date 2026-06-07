@@ -1,0 +1,214 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 11/04/2024 12:01:59 AM
+// Design Name: 
+// Module Name: IPSxIR
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
+
+
+module IPSxIR(
+    input clk,                    // Clock
+    input start,                
+    input [4:0]sensors,    
+    output reg LIN1,  
+    output reg LIN2,
+    output reg RIN1,
+    output reg RIN2,
+    output pwm_left,              // PWM output for left motor speed control
+    output pwm_right              // PWM output for right motor speed control
+    );
+    reg [26:0]counter;
+    reg [26:0]delay_timer1=27'd100000000;
+    reg [26:0]delay_timer2=27'd50000000;
+    reg [16:0]dutycycle_left;  
+    reg [16:0]dutycycle_right;
+    reg [4:0] motor_control;
+    reg Turn180;
+    reg Lturn90;
+    reg Rturn90;
+    localparam BLANK_STATE = 5'b11100, FORWARD_STATE = 5'b10100, Ladj_STATE = 5'b01100, Radj_STATE = 5'b11000, NoturnL= 5'b00100, NoturnR=5'b10000,FORWARD_STATE1=5'b00000;
+    localparam BLANK_STATE1 = 5'b11110,FORWARD_STATE2 = 5'b10110, Ladj_STATE1 = 5'b01110, Radj_STATE1 = 5'b11010, L90_STATE=5'b00110, R90_STATE=5'b10010,FORWARD_STATE3=5'b00010;
+    localparam Self_Ladj= 5'b00101,Self_Radj= 5'b10001;
+    localparam T180_STATE= 5'b00011,T180_STATE1= 5'b10111;
+    pwm_simple #(.WIDTH(17)) pwm_left_module (
+        .clk(clk),
+        .start(start),
+        .duty(dutycycle_left),
+        .pwm_out(pwm_left)
+    );
+   pwm_simple #(.WIDTH(17)) pwm_right_module (
+        .clk(clk),
+        .start(start),
+        .duty(dutycycle_right),
+        .pwm_out(pwm_right)
+    );
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    initial 
+    begin
+        Turn180=0;
+        Lturn90=0;
+        Rturn90=0;
+    end
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////   
+    always @(posedge clk ) begin
+        if (!Turn180&&!Lturn90&&!Rturn90) 
+        begin
+            counter <= 0;
+            motor_control<=sensors;
+        end 
+        else if (Turn180||Lturn90||Rturn90)
+        begin
+            counter <= counter + 1;  
+        end
+        else if (Turn180&&!Lturn90&&!Rturn90)
+        begin
+            if(counter<delay_timer1)
+            begin
+            motor_control<=T180_STATE;
+            end
+            else if (counter>delay_timer1)
+            begin
+            Turn180=0;
+            end
+        end
+        else if (!Turn180&&Lturn90&&!Rturn90)
+        begin
+            if(counter<delay_timer2)
+            begin
+            motor_control<=L90_STATE;
+            end
+            else if (counter>delay_timer2)
+            begin
+            Lturn90=0;
+            end
+        end
+        else if (!Turn180&&!Lturn90&&Rturn90)
+        begin
+            if(counter<delay_timer2)
+            begin
+            motor_control<=R90_STATE;
+            end
+            else if (counter>delay_timer2)
+            begin
+            Rturn90=0;
+            end
+        end    
+    end
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  
+
+    always @(*)
+    begin
+    case(motor_control)
+       
+        BLANK_STATE,BLANK_STATE1:
+        begin
+            dutycycle_left = 17'd98304; //75% duty cycle. 
+            dutycycle_right = 17'd98304;
+            LIN1=1;
+            RIN1=1;
+            LIN2=0;
+            RIN2=0;
+        end
+        FORWARD_STATE,FORWARD_STATE1,FORWARD_STATE2,FORWARD_STATE3,NoturnL,NoturnR:
+        begin
+            dutycycle_left = 17'd98304; //75% duty cycle. 
+            dutycycle_right = 17'd98304;
+            LIN1=1;
+            RIN1=1;
+            LIN2=0;
+            RIN2=0;
+        end
+        Ladj_STATE,Ladj_STATE1:
+        begin
+            dutycycle_left = 17'd65536;   //50% duty cycle. 
+            dutycycle_right = 17'd98304;  //75% duty cycle.   
+            LIN1=1;
+            RIN1=1;
+            LIN2=0;
+            RIN2=0;  
+        end
+        Radj_STATE,Radj_STATE1:
+        begin
+            dutycycle_left = 17'd98304;  
+            dutycycle_right = 17'd65536;  
+            LIN1=1;
+            RIN1=1;
+            LIN2=0;
+            RIN2=0; 
+        end
+        L90_STATE:
+        begin
+            dutycycle_left = 17'd98304; //75% duty cycle. 
+            dutycycle_right = 17'd98304;
+            LIN1=0;
+            RIN1=1;
+            LIN2=1;
+            RIN2=0;
+            Lturn90=1;
+        end
+        R90_STATE:
+        begin
+            dutycycle_left = 17'd98304; //75% duty cycle. 
+            dutycycle_right = 17'd98304;
+            LIN1=1;
+            RIN1=0;
+            LIN2=0;
+            RIN2=1;
+            Rturn90=1;
+        end
+        T180_STATE,T180_STATE1:
+        begin
+            dutycycle_left = 17'd98304; //75% duty cycle. 
+            dutycycle_right = 17'd98304;
+            LIN1=1;
+            RIN1=0;
+            LIN2=0;
+            RIN2=1;
+            Turn180=1;
+        end
+        Self_Ladj:
+        begin
+            dutycycle_left = 17'd26214; //20% duty cycle. 
+            dutycycle_right = 17'd26214;
+            LIN1=1;
+            RIN1=0;
+            LIN2=0;
+            RIN2=1;
+        end
+        Self_Radj:
+        begin
+            dutycycle_left = 17'd26214; //75% duty cycle. 
+            dutycycle_right = 17'd26214;
+            LIN1=0;
+            RIN1=1;
+            LIN2=1;
+            RIN2=0;    
+        end
+        default: 
+        begin
+            dutycycle_left = 17'd0;  
+            dutycycle_right = 17'd0;
+            LIN1=0;
+            RIN1=0;
+            LIN2=0;
+            RIN2=0;
+        end
+    endcase
+    end
+endmodule
+

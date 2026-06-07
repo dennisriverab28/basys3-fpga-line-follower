@@ -1,0 +1,75 @@
+module Current_Pro(  
+    input clk,                  // System clock input
+    input comp_outA,            // Comparator output for channel A
+    input comp_outB,            // Comparator output for channel B
+    output reg ena,             // Enable signal for Motor 1 
+    output reg enb,             // Enable signal for Motor 2
+    output reg In1,
+    output reg In3, 
+    output reg LED0        
+);
+
+    reg [27:0] timer;           // Timer for overcurrent duration
+    reg [27:0] five_sec_timer;  // Timer for 5 seconds
+    reg [27:0] cooldown_timer;  // Timer for cooldown period
+    reg [1:0] state_stall;
+    parameter ON = 2'b11;
+    parameter OFF = 2'b00;
+    parameter COOL_DOWN = 2'b10; // New state for cooldown
+    parameter TIMEOUT = 5_000_000; // Timeout duration for overcurrent
+    parameter FIVE_SEC_TIMEOUT = 50_000_000; // 5 seconds timeout
+    parameter COOLDOWN_TIMEOUT = 2_000_000; // Cooldown period
+
+    // Initialize state on reset
+    initial begin
+        timer = 0;              // Set the timer to 0 at the start
+        five_sec_timer = 0;     // Initialize the 5 seconds timer
+        cooldown_timer = 0;     // Initialize the cooldown timer
+        ena = 1;                // Enable Motor 1 
+        enb = 1;                // Enable Motor 2
+        In1 = 1;
+        In3 = 1; 
+        state_stall = ON;
+        LED0 = 0;              // LED off initially
+    end
+
+    // Always block triggered on the rising edge of the clock
+    always @(posedge clk) begin
+        case(state_stall)
+            ON: begin
+                ena = 1;          // Enable Motors
+                enb = 1;
+                timer = 0;       // Reset timer when in ON state
+                five_sec_timer = 0; // Reset the 5 seconds timer
+                cooldown_timer = 0; // Reset the cooldown timer
+                LED0 = 0;        // Turn off LED
+                // Transition to OFF if overcurrent is detected
+                if (comp_outA == 0 || comp_outB == 0) begin
+                    state_stall = OFF;
+                end
+            end
+            OFF: begin
+                ena = 0;          // Disable Motors
+                enb = 0;
+                LED0 = 1;         // Indicate overcurrent condition
+                timer = timer + 1; // Increment the overcurrent timer
+                five_sec_timer = five_sec_timer + 1; // Increment the 5 seconds timer
+                cooldown_timer = 0; // Reset cooldown timer when in OFF state
+                
+                // Reset to ON state after overcurrent timeout
+                if (timer >= TIMEOUT) begin
+                    state_stall = COOL_DOWN; // Transition to cooldown state
+                end
+            end
+            COOL_DOWN: begin
+                cooldown_timer = cooldown_timer + 1; // Increment cooldown timer
+                
+                // If cooldown period is over, reset the state to ON
+                if (cooldown_timer >= COOLDOWN_TIMEOUT) begin
+                    state_stall = ON;
+                end
+            end
+        endcase
+    end 
+endmodule
+

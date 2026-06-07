@@ -1,0 +1,59 @@
+module pwm_servo(
+    input clk,              // 100 MHz clock
+    input switch,           // Switch to toggle duty cycles
+    input wire reset,
+    output reg pwm_out      // PWM signal to servo
+);
+
+localparam OPEN = 1'b0;
+localparam CLOSED = 1'b1;
+
+// Parameters for 50 Hz PWM
+localparam PERIOD = 21'd2000000; // 2,000,000 clock cycles for 50 Hz
+
+// Registers
+reg [20:0] counter; // Increased to accommodate larger counts
+reg [20:0] width;   // PWM width for duty cycle
+reg [17:0] sped;    // Duty cycle widths
+reg [1:0] state, next_state;
+
+initial begin
+    counter = 0;
+    width = 0;
+    pwm_out = 0;
+    state = OPEN;
+end
+
+// Counter for the PWM period
+always @(posedge clk) begin
+    if (reset)
+        counter <= 0;
+    else if (counter >= PERIOD - 1) // Reset counter at the end of the period
+        counter <= 0;
+    else
+        counter <= counter + 1;
+
+    // Generate PWM signal
+    if (counter < width)
+        pwm_out <= 1;
+    else
+        pwm_out <= 0;
+end
+
+// State machine to toggle between duty cycles based on switch
+always @(*) begin
+    case ({!switch})
+        1'b0: next_state = OPEN;
+        1'b1: next_state = CLOSED;
+    endcase
+end
+
+// Duty cycle selection
+always @(posedge clk) begin
+    case (next_state)
+        OPEN: width <= 21'd1840000;  // 92% of 2,000,000
+        CLOSED: width <= 21'd1940000; // 97% of 2,000,000
+    endcase
+end
+
+endmodule
